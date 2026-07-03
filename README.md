@@ -81,9 +81,20 @@ I Apps Script-editoren: velg funksjonen `lagGjesteboken` → **Kjør**.
 URL til det ferdige Google-dokumentet ligger i loggen (Ctrl+Enter / "Executions").
 Dokumentet inneholder alle hilsener med navn og klokkeslett, pluss emoji-statistikk («Jubel fra salen»).
 
+## Oppdatere backend-koden senere
+
+Endringer i `Code.gs` limes inn i Apps Script-editoren, og deretter:
+**Deploy → Manage deployments → ✏️ (rediger) → Version: New version → Deploy.**
+Da beholdes samme URL. (Velger du "New deployment" i stedet, får du ny URL og må
+oppdatere `config.js`.)
+
+Testdata i regnearket fjernes ved å kjøre funksjonen `nullstillHilsener` i editoren.
+Last inn skjermen (index.html) på nytt etterpå.
+
 ## Verdt å vite
 
 - **Ordfilter:** enkle stygge ord avvises i backend (listen `BLOKKERTE_ORD` i `Code.gs` kan justeres). Ingen manuell moderering – alt annet går rett på skjermen.
 - **Dårlig dekning:** gjestesiden køer hilsener lokalt og sender automatisk når nettet er tilbake.
+- **Duplikatvern:** hver hilsen får en `clientId`, og backend hopper over meldinger den allerede har lagret. Googles svar-endepunkt feiler nemlig av og til (404) selv om meldingen ble lagret, og uten dette vernet ville køen sendt samme hilsen flere ganger.
 - **Forsinkelse:** opptil ~3 sek fra sendt til synlig (polling). Ved meldingsbyger slippes de på skjermen én og én med ~2,5 sek mellomrom.
 - **Historikk:** skjermen viser bare hilsener som kommer inn *etter* at den ble åpnet – en omstart spammer ikke skjermen med gamle meldinger. Alt ligger trygt i regnearket uansett.

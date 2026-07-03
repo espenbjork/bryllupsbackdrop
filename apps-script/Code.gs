@@ -38,7 +38,7 @@ function setup() {
   var ss = SpreadsheetApp.create("Eirin & Jonas – hilsener 11. juli 2026");
   var ark = ss.getActiveSheet();
   ark.setName(ARK_NAVN);
-  ark.appendRow(["id", "tidspunkt", "navn", "melding", "type"]);
+  ark.appendRow(["id", "tidspunkt", "navn", "melding", "type", "clientId"]);
   props.setProperty("SHEET_ID", ss.getId());
   Logger.log("Ferdig! Regneark opprettet: " + ss.getUrl());
 }
@@ -57,6 +57,7 @@ function doPost(e) {
     var navn = renskTekst(e.parameter.name || "", 40);
     var melding = renskTekst(e.parameter.message || "", MAKS_LENGDE);
     var type = e.parameter.type === "emoji" ? "emoji" : "text";
+    var clientId = renskTekst(e.parameter.clientId || "", 40);
 
     if (!melding) return svar({ ok: false, error: "Tom melding" });
     if (type === "text" && inneholderBlokkertOrd(navn + " " + melding)) {
@@ -67,8 +68,14 @@ function doPost(e) {
     lås.waitLock(10000);
     try {
       var ark = hentRegneark().getSheetByName(ARK_NAVN);
+      // Duplikatvern: gjestesiden sender samme clientId på nytt hvis den
+      // ikke fikk lest kvitteringen (flakete echo-endepunkt / dårlig wifi).
+      // Er den allerede lagret, svarer vi bare ok igjen uten å lagre.
+      if (clientId && clientId !== "undefined" && finnesClientId(ark, clientId)) {
+        return svar({ ok: true, duplikat: true });
+      }
       var id = ark.getLastRow(); // rad 1 er overskrift → første melding får id 1
-      ark.appendRow([id, new Date(), navn, melding, type]);
+      ark.appendRow([id, new Date(), navn, melding, type, clientId]);
     } finally {
       lås.releaseLock();
     }
@@ -159,8 +166,35 @@ function lagGjesteboken() {
 }
 
 // ---------------------------------------------------------------
+// Vedlikehold: tøm alle hilsener (f.eks. testdata før bryllupet).
+// Kjøres manuelt fra editoren. Overskriftsraden beholdes.
+// ---------------------------------------------------------------
+function nullstillHilsener() {
+  var ark = hentRegneark().getSheetByName(ARK_NAVN);
+  var sisteRad = ark.getLastRow();
+  if (sisteRad > 1) {
+    ark.deleteRows(2, sisteRad - 1);
+  }
+  ark.getRange(1, 6).setValue("clientId"); // sørg for at kolonneoverskriften finnes
+  Logger.log("Slettet " + Math.max(0, sisteRad - 1) + " rader. Arket er klart.");
+}
+
+// ---------------------------------------------------------------
 // Hjelpere
 // ---------------------------------------------------------------
+function finnesClientId(ark, clientId) {
+  var sisteRad = ark.getLastRow();
+  if (sisteRad < 2) return false;
+  // Det holder å sjekke de siste radene - en retry kommer alltid
+  // kort tid etter originalen.
+  var antall = Math.min(sisteRad - 1, 200);
+  var verdier = ark.getRange(sisteRad - antall + 1, 6, antall, 1).getValues();
+  for (var i = 0; i < verdier.length; i++) {
+    if (String(verdier[i][0]) === clientId) return true;
+  }
+  return false;
+}
+
 function renskTekst(t, maksLengde) {
   return String(t).replace(/\s+/g, " ").trim().substring(0, maksLengde);
 }

@@ -207,15 +207,27 @@
     try { localStorage.setItem("ej_kø", JSON.stringify(kø)); } catch (e) {}
   }
 
+  function nyClientId() {
+    return Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
+  }
+
   function postTilBackend(item) {
     var body = new URLSearchParams();
     body.append("name", item.name);
     body.append("message", item.message);
     body.append("type", item.type);
+    body.append("clientId", item.clientId);
     return fetch(SCRIPT_URL, { method: "POST", body: body })
       .then(function (r) {
-        if (!r.ok) throw new Error("HTTP " + r.status);
-        return r.json();
+        if (r.ok) {
+          return r.json().catch(function () { return { ok: true }; });
+        }
+        // Apps Script lagrer og svarer med redirect til googleusercontent.
+        // Det hoppet svarer av og til 404 selv om meldingen ER lagret,
+        // så en redirectet feilstatus regnes som levert (ellers dupliseres
+        // meldingen av køen).
+        if (r.redirected) return { ok: true };
+        throw new Error("HTTP " + r.status);
       });
   }
 
@@ -269,7 +281,7 @@
     try { localStorage.setItem("ej_navn", navn); } catch (e) {}
     sendKnapp.disabled = true;
     setTimeout(function () { sendKnapp.disabled = false; }, 2500);
-    send({ name: navn, message: melding, type: "text" });
+    send({ name: navn, message: melding, type: "text", clientId: nyClientId() });
     meldingFelt.value = "";
     antall.textContent = "0";
   });
@@ -282,7 +294,7 @@
     b.addEventListener("click", function () {
       b.disabled = true;
       setTimeout(function () { b.disabled = false; }, 2000);
-      send({ name: navnFelt.value.trim(), message: e, type: "emoji" });
+      send({ name: navnFelt.value.trim(), message: e, type: "emoji", clientId: nyClientId() });
     });
     emojiBeholder.appendChild(b);
   });
